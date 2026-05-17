@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSAI - BTC 15M Signal</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #ffffff;
+            --buy-color: #00b067;
+            --sell-color: #ff3b30;
+            --neutral-color: #8e8e93;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 로고 스타일 */
+        .logo {
+            font-size: 3rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #f5a623, #ff3b30);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 메인 시그널 화면 */
+        .signal-container {
+            font-size: 14vw; /* 밑에 후원창이 들어와서 비율을 아주 살짝만 조절했습니다 */
+            font-weight: 900;
+            text-transform: uppercase;
+            transition: all 0.5s ease;
+            text-shadow: 0 0 50px rgba(255,255,255,0.1);
+        }
+
+        .state-wait { color: var(--neutral-color); }
+        .state-buy { color: var(--buy-color); text-shadow: 0 0 80px rgba(0, 176, 103, 0.6); }
+        .state-sell { color: var(--sell-color); text-shadow: 0 0 80px rgba(255, 59, 48, 0.6); }
+
+        /* [추가] 후원 섹션 스타일 */
+        .donation-container {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .qr-code {
+            width: 140px;
+            height: 140px;
+            border-radius: 8px;
+            border: 2px solid #333;
+        }
+
+        .donation-text {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .address-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: #1a1a1a;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .address-text {
+            font-size: 0.85rem;
+            color: #aaa;
+            font-family: monospace;
+            user-select: all;
+        }
+
+        .copy-btn {
+            background-color: #333;
+            color: #fff;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover { background-color: #444; }
+
+        /* 알림 권한 요청 버튼 */
+        .auth-btn {
+            position: absolute;
+            bottom: 20px;
+            background-color: #222;
+            color: #666;
+            border: 1px solid #333;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+        .auth-btn:hover { 
+            background-color: #333; 
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="logo">BSAI</div>
+
+    <div id="signal-display" class="signal-container state-wait">
+        WAIT
+    </div>
+
+    <div class="donation-container">
+        <img src="다운로드.png" alt="QR Code" class="qr-code">
+        <div id="donation-msg" class="donation-text">1USDT 후원 Ethereum(ERC20)</div>
+        <div class="address-box">
+            <span class="address-text" id="usdt-address">0xd5268a702bcbfef79e41b429be8a4f73285c32cd</span>
+            <button class="copy-btn" onclick="copyAddress()">COPY</button>
+        </div>
+    </div>
+
+    <button class="auth-btn" onclick="requestNotificationAuth()">🔔 ALERT</button>
+
+    <script>
+        let ws;
+        let candles = [];
+        const maxCandles = 100; 
+        let lastSignal = "WAIT";
+
+        // [추가] 시스템 언어 감지 및 후원 문구 자동 번역 기능
+        function setMultiLanguageDonation() {
+            const userLang = navigator.language || navigator.userLanguage;
+            const msgElement = document.getElementById("donation-msg");
+
+            if (userLang.startsWith("ko")) {
+                msgElement.innerText = "1USDT 후원";
+            } else if (userLang.startsWith("ja")) {
+                msgElement.innerText = "1USDT 寄付";
+            } else if (userLang.startsWith("zh")) {
+                msgElement.innerText = " 1USDT 捐赠";
+            } else {
+                msgElement.innerText = "1USDT Donation"; // 기본 영어
+            }
+        }
+
+        // [추가] 주소 복사 기능
+        function copyAddress() {
+            const address = document.getElementById("usdt-address").innerText;
+            navigator.clipboard.writeText(address).then(() => {
+                alert("Address Copied!");
+            }).catch(err => {
+                console.error("복사 실패: ", err);
+            });
+        }
+
+        // 윈도우 알림 권한 요청
+        function requestNotificationAuth() {
+            if (!("Notification" in window)) {
+                alert("이 브라우저는 윈도우 알림을 지원하지 않습니다.");
+                return;
+            }
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    alert("윈도우 알림 권한이 허용되었습니다!");
+                    sendWindowNotification("BSAI", "알림이 성공적으로 연동되었습니다.");
+                }
+            });
+        }
+
+        // 윈도우 바탕화면 알림 발송 함수
+        function sendWindowNotification(title, body) {
+            if (Notification.permission === "granted") {
+                new Notification(title, { body: body });
+            }
+        }
+
+        // OKX 웹소켓 연결
+        function connectOKX() {
+            ws = new WebSocket("wss://wspap.okx.com:8443/ws/v5/business");
+
+            ws.onopen = () => {
+                console.log("OKX Connected");
+                const subscribeMsg = {
+                    "op": "subscribe",
+                    "args": [{
+                        "channel": "candle15m",
+                        "instId": "BTC-USDT-SWAP"
+                    }]
+                };
+                ws.send(JSON.stringify(subscribeMsg));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.data && data.data[0]) {
+                    processCandleData(data.data[0]);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("Connection closed, reconnecting...");
+                setTimeout(connectOKX, 5000);
+            };
+        }
+
+        // 캔들 데이터 처리 및 이동평균선(SMA) 계산
+        function processCandleData(candleRow) {
+            const timestamp = candleRow[0];
+            const closePrice = parseFloat(candleRow[4]);
+
+            if (candles.length > 0 && candles[0].ts === timestamp) {
+                candles[0].close = closePrice;
+            } else {
+                candles.unshift({ ts: timestamp, close: closePrice });
+                if (candles.length > maxCandles) candles.pop();
+            }
+
+            const prices = candles.map(c => c.close).reverse();
+
+            if (prices.length >= 50) {
+                const ma20 = calculateSMA(prices, 20);
+                const ma50 = calculateSMA(prices, 50);
+
+                const prevPrices = prices.slice(0, -1);
+                const prevMa20 = calculateSMA(prevPrices, 20);
+                const prevMa50 = calculateSMA(prevPrices, 50);
+
+                checkCross(ma20, ma50, prevMa20, prevMa50);
+            }
+        }
+
+        // 단순 이동평균선(SMA) 계산
+        function calculateSMA(data, period) {
+            if (data.length < period) return null;
+            const slice = data.slice(-period);
+            const sum = slice.reduce((acc, val) => acc + val, 0);
+            return sum / period;
+        }
+
+        // 골든크로스 / 데드크로스 체크 및 화면 업데이트
+        function checkCross(ma20, ma50, prevMa20, prevMa50) {
+            if (!ma20 || !ma50 || !prevMa20 || !prevMa50) return;
+
+            const display = document.getElementById("signal-display");
+
+            if (prevMa20 <= prevMa50 && ma20 > ma50) {
+                if (lastSignal !== "BUY") {
+                    lastSignal = "BUY";
+                    display.innerText = "BUY";
+                    display.className = "signal-container state-buy";
+                    sendWindowNotification("★ BUY SIGNAL ★");
+                }
+            } 
+            else if (prevMa20 >= prevMa50 && ma20 < ma50) {
+                if (lastSignal !== "SELL") {
+                    lastSignal
