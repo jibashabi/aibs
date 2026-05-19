@@ -13,7 +13,6 @@
         .buy { color: #00ff66; text-shadow: 0 0 50px rgba(0,255,102,0.6); }
         .sell { color: #ff3333; text-shadow: 0 0 50px rgba(255,51,51,0.6); }
         
-        /* 🕹️ 제어 버튼 디자인 */
         .admin-panel { display: none; gap: 15px; margin-top: 30px; z-index: 10; }
         .btn { font-size: 20px; font-weight: bold; padding: 15px 30px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
         .btn-buy { background: #00ff66; color: #000; }
@@ -52,20 +51,19 @@
     </div>
 
     <script>
-        // 고정 정보 설정
         const GITHUB_USER = 'jibashabi';        
         const GITHUB_REPO = 'aibs';             
 
         let currentSignal = 'WAIT';
         let audioCtx = null;
-        let GITHUB_TOKEN = ''; // 마스터 키는 주소창에서 실시간으로 긁어옵니다.
+        let GITHUB_TOKEN = '';
+        let isUpdating = false; // 💡 버튼 누른 후 딜레이 시간 동안 감시를 일시정지하는 변수
 
-        // 💡 주소창에서 마스터키(token)가 붙어있는지 확인합니다.
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('admin')) {
-            GITHUB_TOKEN = urlParams.get('admin'); // ?admin=ghp_xxx 형태에서 ghp_xxx를 가져옴
+            GITHUB_TOKEN = urlParams.get('admin');
             if (GITHUB_TOKEN) {
-                document.getElementById('adminPanel').style.display = 'flex'; // 키가 있으면 버튼 보여주기
+                document.getElementById('adminPanel').style.display = 'flex';
             }
         }
 
@@ -109,22 +107,30 @@
             }
         }
 
-        // 1.5초마다 깃허브 메모장을 읽어서 전 세계 화면 동기화
+        // 1.5초마다 깃허브 메모장 확인
         function checkSignal() {
+            if (isUpdating) return; // 💡 버튼 누른 직후에는 옛날 신호를 읽어오지 않도록 차단!
+            
             fetch(`https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/signal.txt?t=` + new Date().getTime())
                 .then(res => res.text())
                 .then(text => {
-                    applySignal(text.trim().toUpperCase(), true);
+                    if (!isUpdating) { // 한번 더 더블 체크
+                        applySignal(text.trim().toUpperCase(), true);
+                    }
                 })
                 .catch(() => console.log("신호 대기 중..."));
         }
 
-        // 버튼 누르면 내 마스터키로 깃허브 메모장을 자동 수정하는 함수
+        // 버튼 누르면 실행되는 함수
         async function saveSignal(targetSignal) {
             if (!GITHUB_TOKEN) {
-                alert("조종 권한이 없습니다. 주소를 다시 확인하세요!");
+                alert("조종 권한이 없습니다!");
                 return;
             }
+            
+            isUpdating = true; // ⛔ 감시 일시 정지 시작
+            applySignal(targetSignal, true); // 내 화면부터 즉시 소리 내며 변경!
+            
             const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/signal.txt`;
             
             try {
@@ -146,14 +152,20 @@
                 });
 
                 if (putRes.ok) {
-                    applySignal(targetSignal, false);
-                    console.log(`영구 박제 성공: ${targetSignal}`);
+                    console.log(`깃허브 저장 완료: ${targetSignal}`);
                 } else {
                     alert("송출 실패! 주소창의 토큰 값이 정확한지 확인하세요.");
+                    isUpdating = false;
                 }
             } catch (err) {
                 alert("오류 발생: " + err);
+                isUpdating = false;
             }
+
+            // 💡 깃허브가 완전히 업데이트될 시간을 벌기 위해 4초 후에 감시 재개
+            setTimeout(() => {
+                isUpdating = false;
+            }, 4000);
         }
 
         setInterval(checkSignal, 1500);
