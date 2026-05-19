@@ -5,12 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BSAI - BTC 15M Signal</title>
     <style>
-        body { background-color: #0c0c0c; color: #ffffff; font-family: 'Arial', sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; padding: 20px; box-sizing: border-box; }
-        .title { font-size: 24px; font-weight: bold; color: #ff6600; margin-bottom: 5px; letter-spacing: 2px; text-align: center; }
-        .alarm-status { font-size: 12px; color: #666; margin-bottom: 20px; background: #111; padding: 4px 10px; border-radius: 20px; border: 1px solid #222; text-align: center; }
+        /* 폰 화면에서도 요소들이 겹치지 않게 세로로 정렬 및 스크롤 허용 */
+        body { 
+            background-color: #0c0c0c; 
+            color: #ffffff; 
+            font-family: 'Arial', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start; /* 위에서부터 차례대로 배치 */
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 40px 20px; 
+            box-sizing: border-box; 
+            overflow-y: auto; /* 내용이 많으면 폰에서 부드럽게 스크롤 되도록 */
+        }
         
-        /* 📱 모바일/PC 반응형 크기 최적화 (핵심 수정 구역) */
-        .signal { font-size: 80px; font-weight: 900; text-transform: uppercase; transition: all 0.5s ease; text-shadow: 0 0 20px rgba(255,255,255,0.1); text-align: center; word-break: break-all; }
+        .title { font-size: 24px; font-weight: bold; color: #ff6600; margin-bottom: 5px; letter-spacing: 2px; text-align: center; }
+        .alarm-status { font-size: 12px; color: #666; margin-bottom: 40px; background: #111; padding: 4px 10px; border-radius: 20px; border: 1px solid #222; text-align: center; }
+        
+        /* 📱 타점이 후원상자에 절대 가려지지 않도록 공간 확보 및 반응형 크기 조절 */
+        .signal-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            margin-bottom: 40px; /* 아래 후원상자와의 간격 강제 확보 */
+        }
+        
+        .signal { font-size: 75px; font-weight: 900; text-transform: uppercase; transition: all 0.5s ease; text-shadow: 0 0 20px rgba(255,255,255,0.1); text-align: center; }
         @media (min-width: 768px) {
             .signal { font-size: 10vw; } /* PC 화면에서는 기존처럼 웅장하게 확대 */
         }
@@ -20,19 +44,20 @@
         .sell { color: #ff3333; text-shadow: 0 0 50px rgba(255,51,51,0.6); }
         
         /* 🕹️ 제어 패널 (일반인 주소에선 흔적도 없이 사라짐) */
-        .admin-panel { display: none; gap: 10px; margin-top: 30px; z-index: 10; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 400px; }
+        .admin-panel { display: none; gap: 10px; margin-bottom: 40px; z-index: 10; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 400px; }
         .btn { font-size: 18px; font-weight: bold; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; flex: 1; min-width: 80px; text-align: center; }
         .btn-buy { background: #00ff66; color: #000; }
         .btn-wait { background: #555; color: #fff; }
         .btn-sell { background: #ff3333; color: #fff; }
         .btn:hover { transform: scale(1.05); }
 
-        .donation-box { position: absolute; bottom: 30px; display: flex; flex-direction: column; align-items: center; background: #151515; padding: 12px 20px; border-radius: 12px; border: 1px solid #222; width: 90%; max-width: 320px; box-sizing: border-box; }
-        .donation-text { font-size: 11px; color: #aaa; margin-bottom: 8px; text-align: center; line-height: 1.4; }
-        .qr-code { width: 90px; height: 90px; margin-bottom: 10px; border-radius: 6px; }
-        .wallet-container { display: flex; align-items: center; background: #000; padding: 5px 10px; border-radius: 6px; width: 100%; box-sizing: border-box; justify-content: space-between; }
+        /* 절대 좌표(absolute)를 풀어서 화면 맨 아래에 자연스럽게 안착시킴 */
+        .donation-box { display: flex; flex-direction: column; align-items: center; background: #151515; padding: 15px 20px; border-radius: 12px; border: 1px solid #222; width: 100%; max-width: 340px; box-sizing: border-box; margin-top: auto; }
+        .donation-text { font-size: 11px; color: #aaa; margin-bottom: 10px; text-align: center; line-height: 1.4; }
+        .qr-code { width: 110px; height: 110px; margin-bottom: 12px; border-radius: 6px; }
+        .wallet-container { display: flex; align-items: center; background: #000; padding: 6px 10px; border-radius: 6px; width: 100%; box-sizing: border-box; justify-content: space-between; }
         .wallet-addr { font-size: 11px; color: #888; font-family: monospace; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .copy-btn { background: #ff6600; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold; flex-shrink: 0; }
+        .copy-btn { background: #ff6600; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -40,7 +65,9 @@
     <div class="title">BSAI</div>
     <div id="alarmInfo" class="alarm-status">🔊 Click anywhere to enable sound alerts</div>
     
-    <div id="signalDisplay" class="signal wait">WAIT</div>
+    <div class="signal-container">
+        <div id="signalDisplay" class="signal wait">WAIT</div>
+    </div>
 
     <div id="adminPanel" class="admin-panel">
         <button class="btn btn-buy" id="btnBuy">BUY</button>
