@@ -13,8 +13,9 @@
         .buy { color: #00ff66; text-shadow: 0 0 50px rgba(0,255,102,0.6); }
         .sell { color: #ff3333; text-shadow: 0 0 50px rgba(255,51,51,0.6); }
         
+        /* 🕹️ 제어 패널 (일반 유저에게는 절대 안 보임) */
         .admin-panel { display: none; gap: 15px; margin-top: 30px; z-index: 10; }
-        .btn { font-size: 20px; font-weight: bold; padding: 15px 30px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .btn { font-size: 20px; font-weight: bold; padding: 15px 35px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
         .btn-buy { background: #00ff66; color: #000; }
         .btn-wait { background: #555; color: #fff; }
         .btn-sell { background: #ff3333; color: #fff; }
@@ -51,20 +52,16 @@
     </div>
 
     <script>
-        const GITHUB_USER = 'jibashabi';        
-        const GITHUB_REPO = 'aibs';             
-
+        // 💡 트레이더님만의 고유 암호 공간 주소 (남들이 절대 못 맞추게 대충 섞은 문자)
+        const SECRET_KEY = 'bsai_master_signal_key_991122'; 
+        
         let currentSignal = 'WAIT';
         let audioCtx = null;
-        let GITHUB_TOKEN = '';
-        let isUpdating = false; // 💡 버튼 누른 후 딜레이 시간 동안 감시를 일시정지하는 변수
 
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('admin')) {
-            GITHUB_TOKEN = urlParams.get('admin');
-            if (GITHUB_TOKEN) {
-                document.getElementById('adminPanel').style.display = 'flex';
-            }
+        // 🔒 주소창 뒤에 ?admin 이 붙어있을 때만 버튼 패널을 띄웁니다!
+        const isAdmin = window.location.search.includes('admin');
+        if (isAdmin) {
+            document.getElementById('adminPanel').style.display = 'flex';
         }
 
         window.addEventListener('click', () => {
@@ -107,69 +104,36 @@
             }
         }
 
-        // 1.5초마다 깃허브 메모장 확인
-        function checkSignal() {
-            if (isUpdating) return; // 💡 버튼 누른 직후에는 옛날 신호를 읽어오지 않도록 차단!
-            
-            fetch(`https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/signal.txt?t=` + new Date().getTime())
-                .then(res => res.text())
-                .then(text => {
-                    if (!isUpdating) { // 한번 더 더블 체크
-                        applySignal(text.trim().toUpperCase(), true);
+        // 📡 [전 세계 공통] 인터넷 무료 저장소에서 현재 박제된 신호값 긁어오기 (1초마다 무한 감시)
+        function fetchGlobalSignal() {
+            fetch(`https://api.countapi.xyz/get/${SECRET_KEY}/signal`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.note) {
+                        applySignal(data.note.trim().toUpperCase(), true);
                     }
                 })
-                .catch(() => console.log("신호 대기 중..."));
-        }
-
-        // 버튼 누르면 실행되는 함수
-        async function saveSignal(targetSignal) {
-            if (!GITHUB_TOKEN) {
-                alert("조종 권한이 없습니다!");
-                return;
-            }
-            
-            isUpdating = true; // ⛔ 감시 일시 정지 시작
-            applySignal(targetSignal, true); // 내 화면부터 즉시 소리 내며 변경!
-            
-            const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/signal.txt`;
-            
-            try {
-                const getRes = await fetch(url, { headers: { 'Authorization': `token ${GITHUB_TOKEN}` } });
-                const getData = await getRes.json();
-                const sha = getData.sha;
-
-                const putRes = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Update signal to ${targetSignal}`,
-                        content: btoa(targetSignal),
-                        sha: sha
-                    })
+                .catch(() => {
+                    // 최초 실행 시 저장소가 비어있으면 강제로 WAIT 공간을 개설합니다.
+                    if (isAdmin) {
+                        fetch(`https://api.countapi.xyz/create?namespace=${SECRET_KEY}&key=signal&value=0&note=WAIT`);
+                    }
                 });
-
-                if (putRes.ok) {
-                    console.log(`깃허브 저장 완료: ${targetSignal}`);
-                } else {
-                    alert("송출 실패! 주소창의 토큰 값이 정확한지 확인하세요.");
-                    isUpdating = false;
-                }
-            } catch (err) {
-                alert("오류 발생: " + err);
-                isUpdating = false;
-            }
-
-            // 💡 깃허브가 완전히 업데이트될 시간을 벌기 위해 4초 후에 감시 재개
-            setTimeout(() => {
-                isUpdating = false;
-            }, 4000);
         }
 
-        setInterval(checkSignal, 1500);
-        checkSignal();
+        // 🕹️ [트레이더 전용] 버튼 누르면 인터넷 저장소의 데이터를 완전히 바꿔버림 (박제)
+        function saveSignal(targetSignal) {
+            applySignal(targetSignal, false); // 내 화면 즉시 반영
+            
+            fetch(`https://api.countapi.xyz/update/${SECRET_KEY}/signal?note=${targetSignal}`)
+                .then(res => res.json())
+                .then(() => console.log("서버 저장 성공: " + targetSignal))
+                .catch(err => console.log("서버 저장 실패: " + err));
+        }
+
+        // 1초마다 전 세계 화면이 같은지 무한 감시
+        setInterval(fetchGlobalSignal, 1000);
+        fetchGlobalSignal();
 
         function copyAddress() {
             navigator.clipboard.writeText(document.getElementById('walletAddr').innerText).then(() => {
