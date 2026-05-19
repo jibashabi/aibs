@@ -13,7 +13,7 @@
         .buy { color: #00ff66; text-shadow: 0 0 50px rgba(0,255,102,0.6); }
         .sell { color: #ff3333; text-shadow: 0 0 50px rgba(255,51,51,0.6); }
         
-        /* 🕹️ 제어 패널 (일반 유저에게는 절대 안 보임) */
+        /* 🕹️ 제어 패널 (일반 유저에게는 안 보임) */
         .admin-panel { display: none; gap: 15px; margin-top: 30px; z-index: 10; }
         .btn { font-size: 20px; font-weight: bold; padding: 15px 35px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
         .btn-buy { background: #00ff66; color: #000; }
@@ -37,9 +37,9 @@
     <div id="signalDisplay" class="signal wait">WAIT</div>
 
     <div id="adminPanel" class="admin-panel">
-        <button class="btn btn-buy" onclick="saveSignal('BUY')">BUY</button>
-        <button class="btn btn-wait" onclick="saveSignal('WAIT')">WAIT</button>
-        <button class="btn btn-sell" onclick="saveSignal('SELL')">SELL</button>
+        <button class="btn btn-buy" onclick="sendSignal('BUY')">BUY</button>
+        <button class="btn btn-wait" onclick="sendSignal('WAIT')">WAIT</button>
+        <button class="btn btn-sell" onclick="sendSignal('SELL')">SELL</button>
     </div>
 
     <div class="donation-box">
@@ -52,15 +52,16 @@
     </div>
 
     <script>
-        // 💡 트레이더님만의 고유 암호 공간 주소 (남들이 절대 못 맞추게 대충 섞은 문자)
-        const SECRET_KEY = 'bsai_master_signal_key_991122'; 
+        // 💡 트레이더님 신호방 이름 (남들이 절대 못 가로채게 뒤에 숫자를 길게 섞었습니다)
+        const TOPIC_NAME = 'bsai_live_signal_room_secret_773399'; 
         
         let currentSignal = 'WAIT';
         let audioCtx = null;
 
-        // 🔒 주소창 뒤에 ?admin 이 붙어있을 때만 버튼 패널을 띄웁니다!
-        const isAdmin = window.location.search.includes('admin');
-        if (isAdmin) {
+        // 🔒 [비밀번호 보안] 주소창 뒤에 딱 ?admin=내가정한암호 형식일 때만 버튼 노출
+        // 예: ?admin=1234 라고 치면 버튼이 열립니다.
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('admin') && urlParams.get('admin') === '1234') { 
             document.getElementById('adminPanel').style.display = 'flex';
         }
 
@@ -98,48 +99,59 @@
                 currentSignal = nextSignal;
                 display.innerText = currentSignal;
                 display.className = `signal ${currentSignal.toLowerCase()}`;
+                
                 if (triggerSound && (currentSignal === 'BUY' || currentSignal === 'SELL')) {
                     playAlarmSound(currentSignal);
                 }
             }
         }
 
-        // 📡 [전 세계 공통] 인터넷 무료 저장소에서 현재 박제된 신호값 긁어오기 (1초마다 무한 감시)
-        function fetchGlobalSignal() {
-            fetch(`https://api.countapi.xyz/get/${SECRET_KEY}/signal`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.note) {
-                        applySignal(data.note.trim().toUpperCase(), true);
+        // 🕹️ [트레이더] 버튼 누르면 전 세계로 0.1초 만에 신호 송출
+        function sendSignal(targetSignal) {
+            fetch(`https://ntfy.sh/${TOPIC_NAME}`, {
+                method: 'POST',
+                body: targetSignal
+            })
+            .then(() => {
+                applySignal(targetSignal, false); // 내 화면도 즉시 변경
+            })
+            .catch(err => alert("송출 실패, 다시 시도: " + err));
+        }
+
+        // ⏳ [공통] 새로고침 하거나 처음 들어왔을 때, 서버에 남아있는 가장 마지막 신호 딱 1개만 즉시 긁어오기
+        function loadLatestSignal() {
+            fetch(`https://ntfy.sh/${TOPIC_NAME}/json?poll=1&since=all`)
+                .then(res => res.text())
+                .then(text => {
+                    const lines = text.trim().split('\n');
+                    if (lines.length > 0 && lines[lines.length - 1]) {
+                        const lastData = JSON.parse(lines[lines.length - 1]);
+                        if (lastData && lastData.message) {
+                            // 처음 들어왔을 땐 소리 없이 화면만 싱크 맞추기
+                            applySignal(lastData.message.trim().toUpperCase(), false);
+                        }
                     }
                 })
-                .catch(() => {
-                    // 최초 실행 시 저장소가 비어있으면 강제로 WAIT 공간을 개설합니다.
-                    if (isAdmin) {
-                        fetch(`https://api.countapi.xyz/create?namespace=${SECRET_KEY}&key=signal&value=0&note=WAIT`);
-                    }
-                });
+                .catch(err => console.log("초기 신호 가져오기 실패, 대기 중..."));
         }
 
-        // 🕹️ [트레이더 전용] 버튼 누르면 인터넷 저장소의 데이터를 완전히 바꿔버림 (박제)
-        function saveSignal(targetSignal) {
-            applySignal(targetSignal, false); // 내 화면 즉시 반영
-            
-            fetch(`https://api.countapi.xyz/update/${SECRET_KEY}/signal?note=${targetSignal}`)
-                .then(res => res.json())
-                .then(() => console.log("서버 저장 성공: " + targetSignal))
-                .catch(err => console.log("서버 저장 실패: " + err));
-        }
-
-        // 1초마다 전 세계 화면이 같은지 무한 감시
-        setInterval(fetchGlobalSignal, 1000);
-        fetchGlobalSignal();
+        // ⚡ [공통] 실시간 0.1초 감시단 작동
+        const eventSource = new EventSource(`https://ntfy.sh/${TOPIC_NAME}/sse`);
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data && data.message) {
+                applySignal(data.message.trim().toUpperCase(), true); // 실시간 변동 시 소리 알람!
+            }
+        };
 
         function copyAddress() {
             navigator.clipboard.writeText(document.getElementById('walletAddr').innerText).then(() => {
                 alert('Wallet address copied! Thank you for your support. ☕');
             });
         }
+
+        // 시작하자마자 마지막 신호 상태부터 동기화
+        loadLatestSignal();
     </script>
 </body>
 </html>
