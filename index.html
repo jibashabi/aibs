@@ -1,289 +1,116 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BSAI - BTC 15M Signal</title>
     <style>
-        :root {
-            --bg-color: #121212;
-            --text-color: #ffffff;
-            --buy-color: #00b067;
-            --sell-color: #ff3b30;
-            --neutral-color: #8e8e93;
-        }
+        body { background-color: #0c0c0c; color: #ffffff; font-family: 'Arial', sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .title { font-size: 24px; font-weight: bold; color: #ff6600; margin-bottom: 5px; letter-spacing: 2px; }
+        .alarm-status { font-size: 12px; color: #666; margin-bottom: 20px; background: #111; padding: 4px 10px; border-radius: 20px; border: 1px solid #222; }
+        .signal { font-size: 12vw; font-weight: 900; text-transform: uppercase; transition: all 0.5s ease; text-shadow: 0 0 20px rgba(255,255,255,0.1); }
+        .wait { color: #555555; }
+        .buy { color: #00ff66; text-shadow: 0 0 50px rgba(0,255,102,0.6); }
+        .sell { color: #ff3333; text-shadow: 0 0 50px rgba(255,51,51,0.6); }
+        
+        /* 🕹️ 트레이더님 전용 수동 조종 버튼 디자인 */
+        .admin-panel { display: none; gap: 15px; margin-top: 30px; z-index: 10; }
+        .btn { font-size: 20px; font-weight: bold; padding: 15px 30px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .btn-buy { background: #00ff66; color: #000; }
+        .btn-wait { background: #555; color: #fff; }
+        .btn-sell { background: #ff3333; color: #fff; }
+        .btn:hover { transform: scale(1.05); }
 
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Arial', sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        /* 로고 스타일 */
-        .logo {
-            font-size: 3rem;
-            font-weight: 900;
-            letter-spacing: 4px;
-            margin-bottom: 20px;
-            background: linear-gradient(45deg, #f5a623, #ff3b30);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        /* 메인 시그널 화면 */
-        .signal-container {
-            font-size: 14vw; /* 밑에 후원창이 들어와서 비율을 아주 살짝만 조절했습니다 */
-            font-weight: 900;
-            text-transform: uppercase;
-            transition: all 0.5s ease;
-            text-shadow: 0 0 50px rgba(255,255,255,0.1);
-        }
-
-        .state-wait { color: var(--neutral-color); }
-        .state-buy { color: var(--buy-color); text-shadow: 0 0 80px rgba(0, 176, 103, 0.6); }
-        .state-sell { color: var(--sell-color); text-shadow: 0 0 80px rgba(255, 59, 48, 0.6); }
-
-        /* [추가] 후원 섹션 스타일 */
-        .donation-container {
-            margin-top: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            z-index: 10;
-        }
-
-        .qr-code {
-            width: 140px;
-            height: 140px;
-            border-radius: 8px;
-            border: 2px solid #333;
-        }
-
-        .donation-text {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-
-        .address-box {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background-color: #1a1a1a;
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid #333;
-        }
-
-        .address-text {
-            font-size: 0.85rem;
-            color: #aaa;
-            font-family: monospace;
-            user-select: all;
-        }
-
-        .copy-btn {
-            background-color: #333;
-            color: #fff;
-            border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: background 0.2s;
-        }
-        .copy-btn:hover { background-color: #444; }
-
-        /* 알림 권한 요청 버튼 */
-        .auth-btn {
-            position: absolute;
-            bottom: 20px;
-            background-color: #222;
-            color: #666;
-            border: 1px solid #333;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.3s;
-        }
-        .auth-btn:hover { 
-            background-color: #333; 
-            color: #fff;
-        }
+        .donation-box { position: absolute; bottom: 40px; display: flex; flex-direction: column; align-items: center; background: #151515; padding: 15px 25px; border-radius: 12px; border: 1px solid #222; }
+        .donation-text { font-size: 12px; color: #aaa; margin-bottom: 8px; text-align: center; }
+        .qr-code { width: 100px; height: 100px; margin-bottom: 10px; border-radius: 6px; }
+        .wallet-container { display: flex; align-items: center; background: #000; padding: 5px 10px; border-radius: 6px; }
+        .wallet-addr { font-size: 11px; color: #888; font-family: monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .copy-btn { background: #ff6600; color: white; border: none; padding: 4px 8px; margin-left: 8px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div class="logo">BSAI</div>
+    <div class="title">BSAI</div>
+    <div id="alarmInfo" class="alarm-status">🔊 Click anywhere to enable sound alerts</div>
+    
+    <div id="signalDisplay" class="signal wait">WAIT</div>
 
-    <div id="signal-display" class="signal-container state-wait">
-        WAIT
+    <div id="adminPanel" class="admin-panel">
+        <button class="btn btn-buy" onclick="changeSignal('BUY')">BUY</button>
+        <button class="btn btn-wait" onclick="changeSignal('WAIT')">WAIT</button>
+        <button class="btn btn-sell" onclick="changeSignal('SELL')">SELL</button>
     </div>
 
-    <div class="donation-container">
-        <img src="다운로드.png" alt="QR Code" class="qr-code">
-        <div id="donation-msg" class="donation-text">1USDT 후원</div>
-        <div class="address-box">
-            <span class="address-text" id="usdt-address">0xd5268a702bcbfef79e41b429be8a4f73285c32cd</span>
+    <div class="donation-box">
+        <div class="donation-text">This tool is 100% free. Buy me a coffee if this helped! ☕<br><strong style="color:#00ff66;">USDT (TRC-20 Network only)</strong></div>
+        <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=0xd5268a702bcbfef79e41b429be8a4f73285c32cd" alt="QR Code">
+        <div class="wallet-container">
+            <span class="wallet-addr" id="walletAddr">0xd5268a702bcbfef79e41b429be8a4f73285c32cd</span>
             <button class="copy-btn" onclick="copyAddress()">COPY</button>
         </div>
     </div>
 
-    <button class="auth-btn" onclick="requestNotificationAuth()">🔔 ALERT</button>
-
     <script>
-        let ws;
-        let candles = [];
-        const maxCandles = 100; 
-        let lastSignal = "WAIT";
+        let currentSignal = 'WAIT';
+        let audioCtx = null;
 
-        // [추가] 시스템 언어 감지 및 후원 문구 자동 번역 기능
-        function setMultiLanguageDonation() {
-            const userLang = navigator.language || navigator.userLanguage;
-            const msgElement = document.getElementById("donation-msg");
+        // 주소창 뒤에 ?admin이 붙어있는지 확인해서 조종 버튼 띄우기
+        const isAdmin = window.location.search.includes('admin');
+        if (isAdmin) {
+            document.getElementById('adminPanel').style.display = 'flex';
+        }
 
-            if (userLang.startsWith("ko")) {
-                msgElement.innerText = "1USDT 후원";
-            } else if (userLang.startsWith("ja")) {
-                msgElement.innerText = "1USDT 寄付";
-            } else if (userLang.startsWith("zh")) {
-                msgElement.innerText = " 1USDT 捐赠";
-            } else {
-                msgElement.innerText = "1USDT Donation"; // 기본 영어
+        // 화면 클릭 시 알람 오디오 활성화
+        window.addEventListener('click', () => {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                document.getElementById('alarmInfo').innerText = '🔔 Sound alerts are active';
+                document.getElementById('alarmInfo').style.color = '#00ff66';
+            }
+        });
+
+        // 청각 알람 함수
+        function playAlarmSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            if (type === 'BUY') {
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime); gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+                setTimeout(() => {
+                    const o2 = audioCtx.createOscillator(); const g2 = audioCtx.createGain();
+                    o2.connect(g2); g2.connect(audioCtx.destination);
+                    o2.frequency.setValueAtTime(880, audioCtx.currentTime); g2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    o2.start(); o2.stop(audioCtx.currentTime + 0.15);
+                }, 200);
+            } else if (type === 'SELL') {
+                osc.frequency.setValueAtTime(330, audioCtx.currentTime); gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
             }
         }
 
-        // [추가] 주소 복사 기능
+        // 버튼 딸깍 누르면 신호 바꾸고 소리 내는 핵심 함수
+        function changeSignal(targetSignal) {
+            if (targetSignal === currentSignal) return;
+            
+            currentSignal = targetSignal;
+            const display = document.getElementById('signalDisplay');
+            
+            display.innerText = currentSignal;
+            display.className = `signal ${currentSignal.toLowerCase()}`;
+            
+            if (currentSignal === 'BUY' || currentSignal === 'SELL') {
+                playAlarmSound(currentSignal);
+            }
+        }
+
         function copyAddress() {
-            const address = document.getElementById("usdt-address").innerText;
-            navigator.clipboard.writeText(address).then(() => {
-                alert("Address Copied!");
-            }).catch(err => {
-                console.error("복사 실패: ", err);
+            navigator.clipboard.writeText(document.getElementById('walletAddr').innerText).then(() => {
+                alert('Wallet address copied! Thank you for your support. ☕');
             });
         }
-
-        // 윈도우 알림 권한 요청
-        function requestNotificationAuth() {
-            if (!("Notification" in window)) {
-                alert("이 브라우저는 윈도우 알림을 지원하지 않습니다.");
-                return;
-            }
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    alert("윈도우 알림 권한이 허용되었습니다!");
-                    sendWindowNotification("BSAI", "알림이 성공적으로 연동되었습니다.");
-                }
-            });
-        }
-
-        // 윈도우 바탕화면 알림 발송 함수
-        function sendWindowNotification(title, body) {
-            if (Notification.permission === "granted") {
-                new Notification(title, { body: body });
-            }
-        }
-
-        // OKX 웹소켓 연결
-        function connectOKX() {
-            ws = new WebSocket("wss://wspap.okx.com:8443/ws/v5/business");
-
-            ws.onopen = () => {
-                console.log("OKX Connected");
-                const subscribeMsg = {
-                    "op": "subscribe",
-                    "args": [{
-                        "channel": "candle15m",
-                        "instId": "BTC-USDT-SWAP"
-                    }]
-                };
-                ws.send(JSON.stringify(subscribeMsg));
-            };
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.data && data.data[0]) {
-                    processCandleData(data.data[0]);
-                }
-            };
-
-            ws.onclose = () => {
-                console.log("Connection closed, reconnecting...");
-                setTimeout(connectOKX, 5000);
-            };
-        }
-
-        // 캔들 데이터 처리 및 이동평균선(SMA) 계산
-        function processCandleData(candleRow) {
-            const timestamp = candleRow[0];
-            const closePrice = parseFloat(candleRow[4]);
-
-            if (candles.length > 0 && candles[0].ts === timestamp) {
-                candles[0].close = closePrice;
-            } else {
-                candles.unshift({ ts: timestamp, close: closePrice });
-                if (candles.length > maxCandles) candles.pop();
-            }
-
-            const prices = candles.map(c => c.close).reverse();
-
-            if (prices.length >= 50) {
-                const ma20 = calculateSMA(prices, 20);
-                const ma50 = calculateSMA(prices, 50);
-
-                const prevPrices = prices.slice(0, -1);
-                const prevMa20 = calculateSMA(prevPrices, 20);
-                const prevMa50 = calculateSMA(prevPrices, 50);
-
-                checkCross(ma20, ma50, prevMa20, prevMa50);
-            }
-        }
-
-        // 단순 이동평균선(SMA) 계산
-        function calculateSMA(data, period) {
-            if (data.length < period) return null;
-            const slice = data.slice(-period);
-            const sum = slice.reduce((acc, val) => acc + val, 0);
-            return sum / period;
-        }
-
-        // 골든크로스 / 데드크로스 체크 및 화면 업데이트
-        function checkCross(ma20, ma50, prevMa20, prevMa50) {
-            if (!ma20 || !ma50 || !prevMa20 || !prevMa50) return;
-
-            const display = document.getElementById("signal-display");
-
-            if (prevMa20 <= prevMa50 && ma20 > ma50) {
-                if (lastSignal !== "BUY") {
-                    lastSignal = "BUY";
-                    display.innerText = "BUY";
-                    display.className = "signal-container state-buy";
-                    sendWindowNotification("★ BUY SIGNAL ★");
-                }
-            } 
-            else if (prevMa20 >= prevMa50 && ma20 < ma50) {
-                if (lastSignal !== "SELL") {
-                    lastSignal = "SELL";
-                    display.innerText = "SELL";
-                    display.className = "signal-container state-sell";
-                    sendWindowNotification("★ SELL SIGNAL ★");
-                }
-            }
-        }
-
-        // 구동 시작시 다국어 설정도 함께 실행
-        setMultiLanguageDonation();
-        connectOKX();
     </script>
 </body>
 </html>
